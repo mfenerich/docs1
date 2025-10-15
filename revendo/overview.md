@@ -1,263 +1,143 @@
 ---
-title: 2-implementation
-description: 
+title: 1. Overview
+description: High-level overview of the Revendo trade-in integration architecture and workflow
 published: true
-date: 2025-10-15T13:05:45.990Z
-tags: 
+date: 2025-10-15T13:00:00.000Z
+tags: overview, architecture, integration, revendo
 editor: markdown
-dateCreated: 2025-10-15T12:45:50.633Z
+dateCreated: 2025-10-15T12:45:00.000Z
 ---
 
-# Implementation Guide
+# Revendo Integration Overview
 
-## Frontend: Iframe + Events
+## What is Revendo?
 
-### 1. Add iframe to your checkout page
+Revendo is a device trade-in system that allows customers to get instant quotes for their old devices and receive credit during checkout. This integration enables partner e-commerce platforms to offer seamless trade-in functionality directly in their purchase flow.
 
-```html
-<div class="trade-in-section">
-  <h3>Trade in your old device</h3>
-  <iframe 
-    id="revendo-iframe"
-    src="https://purchase.revendo.dev/sell-a-device-iframe/?iframe=1"
-    style="width: 100%; border: none; min-height: 600px;">
-  </iframe>
-</div>
+## Integration Architecture
+
+The Revendo integration uses a **three-layer architecture**:
+
+### 1. Frontend Layer (Iframe + postMessage)
+- Partner website embeds a Revendo iframe into their checkout or product pages
+- Communication happens via secure `postMessage` API
+- No page redirects - seamless user experience
+
+### 2. State Management (Client-side)
+- Trade-in offer details stored in browser `sessionStorage`
+- Survives page refreshes during checkout
+- Data persists until order completion
+
+### 3. Backend Layer (REST API)
+- Partner backend calls Revendo API when customer completes purchase
+- Creates finalized trade-in order in Revendo system
+- Returns tracking URL for customer
+
+## How It Works
+
+### Customer Journey
+
+1. **Device Selection**
+   - Customer browses devices in embedded iframe
+   - Selects their device and answers condition questions
+   - Receives instant trade-in quote
+
+2. **Quote Applied**
+   - Trade-in credit appears in checkout summary
+   - Order total automatically reduced
+   - Customer completes purchase as normal
+
+3. **Order Finalization**
+   - Partner backend notifies Revendo API
+   - Trade-in order created with customer details
+   - Customer receives tracking URL and shipping label
+
+### Data Flow
+
+```
+[Customer] → [Iframe] → postMessage → [Partner Frontend]
+                                            ↓ sessionStorage
+                                      [Checkout Page]
+                                            ↓
+                                     [Order Complete]
+                                            ↓
+                              [Partner Backend] → API Call
+                                            ↓
+                                   [Revendo Backend]
+                                            ↓
+                                  [Trade-in Order Created]
 ```
 
-### 2. Add event listener (copy this exactly)
-```javascript
-window.addEventListener('message', function(event) {
-  // Security check - very important!
-  if (event.origin !== 'https://purchase.revendo.dev') return;
-  
-  // Handle different event types
-  switch(event.data.type) {
-    case 'revendo_resize':
-      handleResize(event.data.height);
-      break;
-    case 'revendo_device_selected':
-      handleDeviceSelected(event.data.details);
-      break;
-    case 'revendo_remove_device_selected':
-      handleDeviceRemoved();
-      break;
-    case 'revendo_cart_updated':
-      handleCartUpdated(event.data.cart);
-      break;
-  }
-});
+## Key Integration Points
 
-function handleResize(height) {
-  document.getElementById('revendo-iframe').style.height = height + 'px';
-}
+### Frontend Integration
+- **Iframe URL**: `https://purchase.revendo.dev/sell-a-device-iframe/?iframe=1`
+- **Events**: Device selection, removal, cart updates, resize
+- **Security**: Origin verification required (`https://purchase.revendo.dev`)
 
-function handleDeviceSelected(details) {
-  sessionStorage.setItem('revendo_offer_id', details.price_id);
-  sessionStorage.setItem('revendo_credit', details.price.final_cash);
-  sessionStorage.setItem('revendo_device', details.product.name);
-  showTradeInInCheckout(details.product.name, details.price.final_cash);
-}
+### Backend Integration
+- **Endpoint**: `POST /wp-json/revendo/v1/orders/finalize`
+- **Authentication**: API key in `X-Revendo-API-Key` header
+- **Trigger**: Called after customer completes checkout
 
-function handleDeviceRemoved() {
-  sessionStorage.removeItem('revendo_offer_id');
-  sessionStorage.removeItem('revendo_credit');
-  sessionStorage.removeItem('revendo_device');
-  hideTradeInInCheckout();
-}
+## Important Concepts
 
-function handleCartUpdated(cart) {
-  if (cart.length > 0) {
-    const newPrice = cart[0].price.final_cash;
-    sessionStorage.setItem('revendo_credit', newPrice);
-    updateCheckoutTotal();
-  }
-}
-```
+### Offer ID (price_id)
+- Unique identifier for each trade-in quote
+- Returned in `revendo_device_selected` event as `price_id`
+- Must be sent to API as `offer_id` when finalizing order
+- **Expires after 60 minutes**
 
-## PostMessage Events Reference
+### Payment Methods
+- **Cash**: Customer receives bank transfer
+- **Voucher**: Customer receives store credit (usually higher value)
+- Customer can switch between methods in iframe
+- `revendo_cart_updated` event fires when they switch
 
-| Event Type | When It Fires | Key Data | What To Do |
-|------------|---------------|----------|------------|
-| **`revendo_resize`** | Content height changes | `height` (number) | Resize iframe |
-| **`revendo_device_selected`** | Customer adds device | `price_id`, `product.name`, `price.final_cash` | Store offer_id, show credit |
-| **`revendo_remove_device_selected`** | Customer removes device | `price_id` | Clear data, hide credit |
-| **`revendo_cart_updated`** | Payment method changed | `cart[]` with new prices | Update prices |
-| **`revendo_order_complete`** | Order in iframe (optional) | `order_id`, `total` | Analytics only |
+### Order Lifecycle
+1. **Quote Created** - Customer gets instant price in iframe
+2. **Quote Selected** - Customer adds device to their cart
+3. **Order Finalized** - Partner calls API after checkout
+4. **Device Shipped** - Customer sends device to Revendo
+5. **Payment Processed** - Customer receives payment after inspection
 
-### Event: `revendo_resize`
-**Fires:** When iframe content height changes
-```json
-{
-  "type": "revendo_resize",
-  "height": 1430
-}
-```
+## Security & Best Practices
 
-### Event: `revendo_device_selected`
-**Fires:** Customer selected device and got quote
-```json
-{
-  "type": "revendo_device_selected",
-  "details": {
-    "price_id": "11153245-tmp",
-    "product": { "name": "iPhone 13" },
-    "price": {
-      "final_cash": 237,
-      "final_coupon": 248
-    }
-  }
-}
-```
+### Security Requirements
+- Always verify `event.origin === 'https://purchase.revendo.dev'`
+- Store API key securely in backend (never expose in frontend)
+- Use HTTPS for all communication
+- Sanitize data from iframe before processing
 
-**Important:** `price_id` = `offer_id` for API call
+### Error Handling
+- **Quote expired**: Show message, ask customer to select device again
+- **API errors**: Log error but don't fail customer's main order
+- **Network issues**: Implement retry logic with exponential backoff
+- **Duplicate orders**: 409 errors are OK - order already exists
 
-### Event: `revendo_remove_device_selected`
-**Fires:** Customer removed device from cart
-```json
-{
-  "type": "revendo_remove_device_selected",
-  "price_id": "11153245-tmp"
-}
-```
+### Integration Best Practices
+- Use `sessionStorage` for offer data (survives page refresh)
+- Clear stored data after successful order completion
+- Implement iframe auto-resize for seamless UI
+- Test with provided demo page before production
 
-### Event: `revendo_cart_updated`
-**Fires:** Customer switched payment method (cash ↔ voucher)
-```json
-{
-  "type": "revendo_cart_updated",
-  "cart": [{
-    "price_id": "11153245-tmp",
-    "price": {
-      "final_cash": 237,
-      "final_coupon": 248
-    }
-  }]
-}
-```
+## What You Need to Get Started
 
-### 3. Update your checkout UI
+1. **API Key** - Contact Revendo to receive your `X-Revendo-API-Key`
+2. **Iframe Access** - Production URL: `https://purchase.revendo.dev/sell-a-device-iframe/?iframe=1`
+3. **Testing Tool** - Use the provided `demo/index.html` to test events
+4. **Documentation** - This wiki contains complete implementation guide
 
-```javascript
-function showTradeInInCheckout(deviceName, credit) {
-  // Show the trade-in in your checkout summary
-  const summaryHTML = `
-    <div class="trade-in-item">
-      <span>Trade-in: ${deviceName}</span>
-      <span class="credit">-CHF ${credit.toFixed(2)}</span>
-    </div>
-  `;
-  document.getElementById('checkout-summary').insertAdjacentHTML('beforeend', summaryHTML);
-  
-  // Update order total
-  const currentTotal = parseFloat(document.getElementById('order-total').textContent);
-  const newTotal = Math.max(0, currentTotal - credit);
-  document.getElementById('order-total').textContent = newTotal.toFixed(2);
-}
+## Next Steps
 
-function hideTradeInInCheckout() {
-  // Remove trade-in from display and recalculate
-  const tradeInElement = document.querySelector('.trade-in-item');
-  if (tradeInElement) tradeInElement.remove();
-  // Recalculate your order total
-}
-```
+1. Read the [Implementation Guide](implementation) for step-by-step integration
+2. Review the [API Reference](api) for endpoint specifications
+3. Check [Troubleshooting](troubleshooting) for common issues
+4. Test with the demo HTML file included in the repository
 
-## Backend: API Call
+## Support
 
-### When customer completes checkout
-
-Call this from your backend after creating the order:
-
-**PHP Example:**
-```php
-$offer_id = $_SESSION['revendo_offer_id'] ?? null;
-
-if ($offer_id) {
-  $response = wp_remote_post('https://purchase.revendo.dev/wp-json/revendo/v1/orders/finalize', [
-    'headers' => [
-      'X-Revendo-API-Key' => get_option('revendo_api_key'),
-      'Content-Type' => 'application/json'
-    ],
-    'body' => json_encode([
-      'offer_id' => $offer_id,
-      'partner_order_id' => $order->get_order_number(),
-      'customer' => [
-        'email' => $order->get_billing_email(),
-        'first_name' => $order->get_billing_first_name(),
-        'last_name' => $order->get_billing_last_name(),
-        'phone' => $order->get_billing_phone(),
-        'address' => [
-          'street' => $order->get_billing_address_1(),
-          'zip' => $order->get_billing_postcode(),
-          'city' => $order->get_billing_city(),
-          'country' => $order->get_billing_country()
-        ]
-      ],
-      'shipping_method' => 'post'
-    ])
-  ]);
-  
-  if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) == 200) {
-    $data = json_decode(wp_remote_retrieve_body($response), true);
-    // Store tracking URL for customer
-    $order->update_meta_data('revendo_tracking_url', $data['tracking_url']);
-    $order->save();
-  }
-}
-```
-
-**Node.js Example:**
-```javascript
-const offerId = req.session.revendo_offer_id;
-
-if (offerId) {
-  const response = await axios.post(
-    'https://purchase.revendo.dev/wp-json/revendo/v1/orders/finalize',
-    {
-      offer_id: offerId,
-      partner_order_id: order.id,
-      customer: {
-        email: order.customer.email,
-        first_name: order.customer.firstName,
-        last_name: order.customer.lastName,
-        phone: order.customer.phone,
-        address: {
-          street: order.billing.street,
-          zip: order.billing.zip,
-          city: order.billing.city,
-          country: order.billing.country
-        }
-      },
-      shipping_method: 'post'
-    },
-    {
-      headers: {
-        'X-Revendo-API-Key': process.env.REVENDO_API_KEY,
-        'Content-Type': 'application/json'
-      }
-    }
-  );
-  
-  // Store tracking URL
-  await order.update({ revendo_tracking_url: response.data.tracking_url });
-}
-```
-
-## Important Notes
-
-- **Quotes expire after 60 minutes** - customer needs new quote if they wait too long
-- **Use sessionStorage** - survives page refresh
-- **Don't fail checkout** - if Revendo API fails, complete the main order anyway and log the error
-- **Security** - always verify `event.origin` is exactly `https://purchase.revendo.dev`
-
-## Testing
-
-1. Open the included `iframeTest.html` in your browser
-2. Select a device
-3. Watch the events appear in the log
-4. Verify offer_id is captured correctly
-
-## That's it!
-
-You now have a working integration. See API Documentation for full API details.
+For technical questions or issues:
+- Review the troubleshooting guide
+- Test with the demo tool to isolate issues
+- Contact Revendo technical support with error logs and browser details

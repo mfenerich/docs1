@@ -1,3 +1,13 @@
+---
+title: 3. API Reference
+description: Complete REST API documentation for the Revendo order finalization endpoint
+published: true
+date: 2025-10-15T13:10:00.000Z
+tags: api, rest, endpoint, authentication, integration
+editor: markdown
+dateCreated: 2025-10-15T12:46:00.000Z
+---
+
 # API Reference
 
 ## Endpoint

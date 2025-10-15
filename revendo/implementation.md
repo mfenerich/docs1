@@ -1,3 +1,13 @@
+---
+title: 2. Implementation Guide
+description: Step-by-step guide to integrating Revendo trade-in system into your e-commerce platform
+published: true
+date: 2025-10-15T13:05:45.990Z
+tags: integration, implementation, iframe, postmessage, api
+editor: markdown
+dateCreated: 2025-10-15T12:45:50.633Z
+---
+
 # Implementation Guide
 
 ## Frontend: Iframe + Events

@@ -1,3 +1,13 @@
+---
+title: 4. Troubleshooting
+description: Common issues, debugging tips, and solutions for Revendo integration problems
+published: true
+date: 2025-10-15T13:15:00.000Z
+tags: troubleshooting, debugging, errors, support, faq
+editor: markdown
+dateCreated: 2025-10-15T12:47:00.000Z
+---
+
 # Troubleshooting
 
 ## Iframe Issues
