@@ -1,3 +1,13 @@
+---
+title: 1-overview
+description: 
+published: true
+date: 2025-10-15T13:05:43.727Z
+tags: 
+editor: markdown
+dateCreated: 2025-10-15T12:45:47.405Z
+---
+
 # Revendo Trade-In Integration
 
 ## What is it?
@@ -14,6 +24,30 @@ Add a trade-in calculator to your checkout. Customers select their old device, g
 6. Customer completes purchase
 7. Your system calls Revendo API to create the trade-in order
 8. Customer receives shipping label via email
+
+### System Architecture
+```mermaid
+flowchart TB
+    subgraph subGraph0["DQ Solutions Webshop"]
+        A["Customer Browser"]
+        B["Checkout Page"]
+        C["Backend API"]
+    end
+    subgraph subGraph1["Revendo System"]
+        D["Trade-In Iframe"]
+        F["REST API"]
+        G["Order System"]
+        I["Database"]
+    end
+    A -- Views Products --> B
+    B -- Embeds --> D
+    D -- PostMessage --> A
+    A -- Stores Quote --> B
+    B -- Checkout Complete --> C
+    C -- POST /finalize --> F
+    F -- Create Order --> G
+    G -- Store --> I
+```
 
 ## What you need
 
