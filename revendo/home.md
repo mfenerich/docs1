@@ -23,14 +23,29 @@ This integration allows your customers to:
 
 The integration uses an **embedded iframe** with secure `postMessage` communication and a **backend API** for order finalization.
 
+mermaid
 ```
-Your Website → [Revendo Iframe] → Customer selects device
-                      ↓
-              Gets instant quote
-                      ↓
-          Credit applied to checkout
-                      ↓
-     Your Backend → Revendo API → Trade-in order created
+flowchart TB
+subgraph subGraph0["DQ Solutions Webshop"]
+       A["Customer Browser"]
+       B["Checkout Page"]
+       C["Backend API"]
+ end
+subgraph subGraph1["Revendo System"]
+       D["Trade-In Iframe"]
+       F["REST API"]
+       G["Order System"]
+       I["Database"]
+ end
+   A -- Views Products --> B
+   B -- Embeds --> D
+   D -- PostMessage --> A
+   A -- Stores Quote --> B
+   B -- Checkout Complete --> C
+   C -- POST /finalize --> F
+   F -- Create Order --> G
+   G -- Store --> I
+
 ```
 
 ## Documentation Structure
